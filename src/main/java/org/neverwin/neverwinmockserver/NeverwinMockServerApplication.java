@@ -1,0 +1,15 @@
+package org.neverwin.neverwinmockserver;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
+
+@SpringBootApplication
+@EnableScheduling
+public class NeverwinMockServerApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(NeverwinMockServerApplication.class, args);
+	}
+
+}

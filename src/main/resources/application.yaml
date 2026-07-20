@@ -21,7 +21,7 @@ neverwin:
   cache:
     scheduler:
       enabled: true        # Ubah ke false jika ingin mematikan fitur auto-evict
-      interval-minutes: 1
+      interval-minutes: 1  # Waktu clear all cache dalam menit
     caffeine:
       expire-minutes: 1     # Waktu kedaluwarsa dalam menit
       max-size: 1000        # Maksimal jumlah data di RAM
