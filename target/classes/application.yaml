@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: mock-server
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/neverwin_poc
+    username: postgres
+    password: password
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+neverwin:
+  cache:
+    scheduler:
+      enabled: true        # Ubah ke false jika ingin mematikan fitur auto-evict
+      interval-minutes: 1  # Waktu clear all cache dalam menit
+    caffeine:
+      expire-minutes: 1     # Waktu kedaluwarsa dalam menit
+      max-size: 1000        # Maksimal jumlah data di RAM

@@ -25,8 +25,10 @@ public class ResponseBuilderHelper {
     public ResponseEntity<Object> buildResponse(ScenarioDetail scenarioDetail, Map<String, String> headers, Map<String, String> queryParams, String body) {
         Map<String, Object> requestContext = buildRequestContext(headers, queryParams, body);
 
-        CompletableFuture<HttpHeaders> headersFuture = CompletableFuture.supplyAsync(() -> buildHeaders(scenarioDetail.getResponseHeader(), requestContext));
-        CompletableFuture<Object> bodyFuture = CompletableFuture.supplyAsync(() -> buildBody(scenarioDetail.getResponseBody(), requestContext));
+        String templateName = scenarioDetail.getId().getScenarioMasterId() + "#" + scenarioDetail.getId().getPriority();
+
+        CompletableFuture<HttpHeaders> headersFuture = CompletableFuture.supplyAsync(() -> buildHeaders(templateName, scenarioDetail.getResponseHeader(), requestContext));
+        CompletableFuture<Object> bodyFuture = CompletableFuture.supplyAsync(() -> buildBody(templateName, scenarioDetail.getResponseBody(), requestContext));
 
         CompletableFuture.allOf(headersFuture, bodyFuture).join();
 
@@ -49,11 +51,11 @@ public class ResponseBuilderHelper {
         return map;
     }
 
-    private HttpHeaders buildHeaders(String headerTemplate, Map<String, Object> context) {
+    private HttpHeaders buildHeaders(String templateName, String headerTemplate, Map<String, Object> context) {
         HttpHeaders httpHeaders = new HttpHeaders();
         httpHeaders.add("powered-by", "Neverwin");
 
-        String renderedHeader = templateEngineHelper.render(headerTemplate, context);
+        String renderedHeader = templateEngineHelper.render(templateName, headerTemplate, context);
         if (renderedHeader != null) {
             Map<String, Object> headerMap = jsonHelper.toMap(renderedHeader);
             if (headerMap != null) {
@@ -63,8 +65,8 @@ public class ResponseBuilderHelper {
         return httpHeaders;
     }
 
-    private Object buildBody(String bodyTemplate, Map<String, Object> context) {
-        String renderedBody = templateEngineHelper.render(bodyTemplate, context);
+    private Object buildBody(String templateName, String bodyTemplate, Map<String, Object> context) {
+        String renderedBody = templateEngineHelper.render(templateName, bodyTemplate, context);
         if (renderedBody != null && jsonHelper.isValidJson(renderedBody)) {
             return Objects.requireNonNullElse(jsonHelper.toMap(renderedBody), renderedBody);
         }
