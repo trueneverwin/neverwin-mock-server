@@ -12,7 +12,9 @@ import org.springframework.stereotype.Component;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 @Slf4j
 @Component
@@ -27,17 +29,19 @@ public class ResponseBuilderHelper {
 
         String templateName = scenarioDetail.getId().getScenarioMasterId() + "#" + scenarioDetail.getId().getPriority();
 
-        CompletableFuture<HttpHeaders> headersFuture = CompletableFuture.supplyAsync(() -> buildHeaders(templateName, scenarioDetail.getResponseHeader(), requestContext));
-        CompletableFuture<Object> bodyFuture = CompletableFuture.supplyAsync(() -> buildBody(templateName, scenarioDetail.getResponseBody(), requestContext));
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            Future<HttpHeaders> headersFuture = executor.submit(() -> buildHeaders(templateName, scenarioDetail.getResponseHeader(), requestContext));
+            Future<Object> bodyFuture = executor.submit(() -> buildBody(templateName, scenarioDetail.getResponseBody(), requestContext));
 
-        CompletableFuture.allOf(headersFuture, bodyFuture).join();
+            HttpHeaders responseHeaders = headersFuture.get();
+            Object responseBody = bodyFuture.get();
 
-        HttpHeaders responseHeaders = headersFuture.join();
-        Object responseBody = bodyFuture.join();
+            applyDelay(scenarioDetail.getDelayResponseMs());
 
-        applyDelay(scenarioDetail.getDelayResponseMs());
-
-        return new ResponseEntity<>(responseBody, responseHeaders, HttpStatus.valueOf(scenarioDetail.getHttpStatus()));
+            return new ResponseEntity<>(responseBody, responseHeaders, HttpStatus.valueOf(scenarioDetail.getHttpStatus()));
+        } catch (Exception e) {
+            throw new RuntimeException("Gagal memproses header/body", e);
+        }
     }
 
     private Map<String, Object> buildRequestContext(Map<String, String> headers, Map<String, String> queryParams, String body) {
@@ -55,7 +59,7 @@ public class ResponseBuilderHelper {
         HttpHeaders httpHeaders = new HttpHeaders();
         httpHeaders.add("powered-by", "Neverwin");
 
-        String renderedHeader = templateEngineHelper.render(templateName, headerTemplate, context);
+        String renderedHeader = templateEngineHelper.render(templateName + "#HEADER", headerTemplate, context);
         if (renderedHeader != null) {
             Map<String, Object> headerMap = jsonHelper.toMap(renderedHeader);
             if (headerMap != null) {
@@ -66,7 +70,7 @@ public class ResponseBuilderHelper {
     }
 
     private Object buildBody(String templateName, String bodyTemplate, Map<String, Object> context) {
-        String renderedBody = templateEngineHelper.render(templateName, bodyTemplate, context);
+        String renderedBody = templateEngineHelper.render(templateName + "#BODY", bodyTemplate, context);
         if (renderedBody != null && jsonHelper.isValidJson(renderedBody)) {
             return Objects.requireNonNullElse(jsonHelper.toMap(renderedBody), renderedBody);
         }

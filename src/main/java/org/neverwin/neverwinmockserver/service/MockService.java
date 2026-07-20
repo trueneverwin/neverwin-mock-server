@@ -12,8 +12,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
-import java.util.concurrent.CompletableFuture;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,26 +33,29 @@ public class MockService {
     public ResponseEntity<Object> execute(HttpServletRequest request) {
         String path = request.getRequestURI();
 
-        CompletableFuture<Map<String, String>> headersFuture = CompletableFuture.supplyAsync(() -> extractHeaders(request));
-        CompletableFuture<Map<String, String>> queryParamsFuture = CompletableFuture.supplyAsync(() -> extractQueryParams(request));
-        CompletableFuture<String> bodyFuture = CompletableFuture.supplyAsync(() -> extractBody(request));
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            Future<Map<String, String>> headersFuture = executor.submit(() -> extractHeaders(request));
+            Future<Map<String, String>> queryParamsFuture = executor.submit(() -> extractQueryParams(request));
+            Future<String> bodyFuture = executor.submit(() -> extractBody(request));
 
-        CompletableFuture.allOf(headersFuture, queryParamsFuture, bodyFuture).join();
+            Map<String, String> headers = headersFuture.get();
+            Map<String, String> queryParams = queryParamsFuture.get();
+            String body = bodyFuture.get();
 
-        Map<String, String> headers = headersFuture.join();
-        Map<String, String> queryParams = queryParamsFuture.join();
-        String body = bodyFuture.join();
+            ScenarioMaster master = masterRepository.findByUrlPathAndUrlMethodAndActiveTrue(path, request.getMethod().toUpperCase());
+            if (master == null) return errorMessage("No scenario master found for this path and method");
 
-        ScenarioMaster master = masterRepository.findByUrlPathAndUrlMethodAndActiveTrue(path, request.getMethod().toUpperCase());
-        if (master == null) return errorMessage("No scenario master found for this path and method");
+            List<ScenarioDetail> requests = requestRepository.findByIdScenarioMasterIdAndActiveTrueOrderByIdPriorityAsc(master.getId());
+            if (requests == null || requests.isEmpty()) return errorMessage("No scenario request found for this path and method");
 
-        List<ScenarioDetail> requests = requestRepository.findByIdScenarioMasterIdAndActiveTrueOrderByIdPriorityAsc(master.getId());
-        if (requests == null || requests.isEmpty()) return errorMessage("No scenario request found for this path and method");
+            ScenarioDetail matchedScenario = conditionEvaluator.findMatchedRule(requests, headers, queryParams, body);
+            if (matchedScenario == null) return errorMessage("No scenario request found for this condition");
 
-        ScenarioDetail matchedScenario = conditionEvaluator.findMatchedRule(requests, headers, queryParams, body);
-        if (matchedScenario == null) return errorMessage("No scenario request found for this condition");
+            return responseBuilder.buildResponse(matchedScenario, headers, queryParams, body);
 
-        return responseBuilder.buildResponse(matchedScenario, headers, queryParams, body);
+        } catch (Exception e) {
+            throw new RuntimeException("Gagal memproses header/body", e);
+        }
     }
 
     private Map<String, String> extractHeaders(HttpServletRequest request) {

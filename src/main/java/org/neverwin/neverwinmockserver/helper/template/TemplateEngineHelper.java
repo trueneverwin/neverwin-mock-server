@@ -14,12 +14,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 @Slf4j
 public class TemplateEngineHelper {
 
     private Configuration configuration;
+    private final Map<String, Template> templateCache = new ConcurrentHashMap<>();
 
     @PostConstruct
     private void init() {
@@ -39,11 +41,13 @@ public class TemplateEngineHelper {
         try {
             if (data == null) data = new HashMap<>();
 
-            Template template = new Template(
-                    templateName,
-                    new StringReader(templateContent),
-                    this.configuration
-            );
+            Template template = templateCache.computeIfAbsent(templateName, key -> {
+                try {
+                    return new Template(key, new StringReader(templateContent), this.configuration);
+                } catch (Exception e) {
+                    throw new RuntimeException("Gagal parsing template: " + key, e);
+                }
+            });
 
             StringWriter writer = new StringWriter();
             template.process(data, writer);
@@ -52,6 +56,10 @@ public class TemplateEngineHelper {
         } catch (IOException | TemplateException e) {
             throw new RuntimeException("Gagal memproses template", e);
         }
+    }
+
+    public void clearCache() {
+        this.templateCache.clear();
     }
 
 }
